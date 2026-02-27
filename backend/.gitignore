@@ -1,0 +1,40 @@
+# Артефакты сборки
+/_build/
+/cover/
+/deps/
+/doc/
+/.fetch
+
+# Тестовые артефакты
+erl_crash.dump
+*.ez
+
+# Файлы с секретами — никогда не коммитить!
+/config/prod.secret.exs
+/config/secrets.exs
+*.secret.exs
+
+# Переменные окружения
+.env
+.env.local
+.env.*.local
+
+# Загруженные файлы (если хранятся локально)
+/priv/static/uploads/
+
+# Артефакты Elixir/Erlang
+*.beam
+*.plt
+
+# Файлы редакторов
+.elixir_ls/
+.idea/
+*.iml
+.vscode/
+
+# macOS
+.DS_Store
+
+# Логи
+*.log
+/log/

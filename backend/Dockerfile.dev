@@ -1,0 +1,20 @@
+FROM elixir:1.17-alpine
+
+# Зависимости для компиляции bcrypt и других NIF
+RUN apk add --no-cache build-base git
+
+WORKDIR /app
+
+# Устанавливаем hex и rebar
+RUN mix local.hex --force && mix local.rebar --force
+
+# Копируем зависимости и устанавливаем
+COPY mix.exs mix.lock ./
+RUN MIX_ENV=dev mix deps.get && MIX_ENV=dev mix deps.compile
+
+# Копируем исходники
+COPY . .
+
+EXPOSE 4000
+
+CMD ["mix", "phx.server"]

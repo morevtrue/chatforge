@@ -1,0 +1,12 @@
+{
+  "name": "Pre-task Product Check",
+  "version": "1.0.0",
+  "description": "Перед началом задачи — Product-агент проверяет понимание и соответствие требованиям",
+  "when": {
+    "type": "preTaskExecution"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Прочитай agents/product.md и действуй как Product Agent в режиме preTaskExecution.\n\nПрочитай WHAT_TO_DO.md текущей фазы и sources-of-truth/BUSINESS_SPEC.md.\n\nПроверь:\n1. Задача понята правильно?\n2. Не противоречит ли она BUSINESS_SPEC?\n3. Не выходит ли за рамки текущей фазы?\n4. Есть ли неоднозначности, которые нужно прояснить до начала?\n\nЕсли есть вопросы — задай их явно до начала реализации. Если всё ясно — дай короткое подтверждение и разреши продолжать."
+  }
+}

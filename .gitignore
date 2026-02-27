@@ -1,0 +1,30 @@
+# ─── Секреты ──────────────────────────────────────────────────────────────────
+.env
+.env.prod
+.env.local
+
+# ─── IDE ──────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+
+# ─── Frontend ─────────────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# ─── Backend ──────────────────────────────────────────────────────────────────
+backend/_build/
+backend/deps/
+backend/priv/static/
+backend/.elixir_ls/
+backend/cover/
+backend/doc/
+backend/*.ez
+
+# ─── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── Docker volumes (если вдруг попадут) ──────────────────────────────────────
+*.log

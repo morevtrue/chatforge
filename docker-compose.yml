@@ -1,0 +1,138 @@
+# Docker Compose конфигурация для dev-окружения ChatForge
+# Сервисы: PostgreSQL, Redis, MinIO, Traefik
+
+services:
+
+  # ─── База данных ───────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: chatforge_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chatforge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-chatforge_dev}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chatforge} -d ${POSTGRES_DB:-chatforge_dev}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ─── Кеш и сессии ─────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: chatforge_redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ─── Файловое хранилище (S3-совместимое) ──────────────────────────────────
+  minio:
+    image: minio/minio
+    container_name: chatforge_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Веб-консоль
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─── Phoenix backend ──────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: chatforge_backend
+    restart: unless-stopped
+    environment:
+      MIX_ENV: dev
+      DATABASE_URL: postgresql://${POSTGRES_USER:-chatforge}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-chatforge_dev}
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?SECRET_KEY_BASE is required}
+      GUARDIAN_SECRET_KEY: ${GUARDIAN_SECRET_KEY:-dev_guardian_secret_key_min_64_chars_long_replace_in_production_xx}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_HOST: minio
+      S3_PORT: "9000"
+      S3_BUCKET: ${MINIO_BUCKET:-chatforge}
+      S3_PUBLIC_URL: http://localhost:9000
+      CORS_ORIGINS: http://localhost:5173
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - backend_deps:/app/deps
+      - backend_build:/app/_build
+
+  # ─── Reverse proxy и маршрутизация ────────────────────────────────────────
+  traefik:
+    image: traefik:v3
+    container_name: chatforge_traefik
+    restart: unless-stopped
+    command:
+      # Включаем API и dashboard
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      # Провайдер Docker для автоматического обнаружения сервисов
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      # Точки входа
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Логирование
+      - "--log.level=INFO"
+    ports:
+      - "80:80"       # HTTP
+      - "443:443"     # HTTPS
+      - "8181:8080"   # Dashboard Traefik
+    volumes:
+      # Доступ к Docker socket для автоматического обнаружения контейнеров
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+# ─── Именованные тома для персистентности данных ──────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  backend_deps:
+    driver: local
+  backend_build:
+    driver: local
