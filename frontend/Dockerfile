@@ -12,7 +12,7 @@ COPY . .
 ARG VITE_CHAT_BASE_URL=http://localhost/?subdomain={subdomain}
 ENV VITE_CHAT_BASE_URL=$VITE_CHAT_BASE_URL
 
-RUN npm run build
+RUN npx vite build
 
 # ── Stage 2: Serve ────────────────────────────────────────────────────────────
 FROM nginx:1.27-alpine AS runtime
