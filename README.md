@@ -91,20 +91,24 @@ curl -fsSL https://get.docker.com | sh
 
 ### Запуск
 
+Traefik запускается глобально один раз для всего сервера, затем каждый проект подключается к его сети.
+
 ```bash
-# 1. Клонировать репозиторий
+# ── Шаг 1: Глобальный Traefik (один раз на сервере) ──────────────────────
+cp /opt/chatforge/traefik/.env.example /opt/traefik/.env
+# заполнить DOMAIN и ACME_EMAIL
+docker compose -f /opt/traefik/docker-compose.yml --env-file /opt/traefik/.env up -d
+
+# ── Шаг 2: ChatForge ─────────────────────────────────────────────────────
 git clone <repo> /opt/chatforge
 cd /opt/chatforge
 
-# 2. Создать и заполнить .env.prod
 cp .env.prod.example .env.prod
 nano .env.prod
+# Сгенерировать секреты:
+#   openssl rand -base64 64  → SECRET_KEY_BASE
+#   openssl rand -base64 64  → GUARDIAN_SECRET_KEY
 
-# 3. Сгенерировать секреты
-openssl rand -base64 64  # → SECRET_KEY_BASE
-openssl rand -base64 64  # → GUARDIAN_SECRET_KEY
-
-# 4. Запустить
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 ```
 
@@ -113,10 +117,10 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 ### DNS
 
 Направить на IP сервера:
-- `yourdomain.com` → фронтенд + API
-- `minio.yourdomain.com` → MinIO S3
-- `minio-console.yourdomain.com` → MinIO консоль
-- `traefik.yourdomain.com` → Traefik dashboard
+- `chatforge.yourdomain.com` → фронтенд + API
+- `minio.chatforge.yourdomain.com` → MinIO S3
+- `minio-console.chatforge.yourdomain.com` → MinIO консоль
+- `traefik.yourdomain.com` → Traefik dashboard (глобальный)
 
 TLS-сертификаты выпускаются автоматически через Let's Encrypt.
 
