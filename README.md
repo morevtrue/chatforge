@@ -25,14 +25,13 @@ ChatForge позволяет любому человеку без навыков
 | Frontend   | React / TypeScript / Vite                 |
 | БД         | PostgreSQL 16+                            |
 | Кеш        | Redis 7+                                  |
-| Файлы      | S3-совместимое (MinIO для dev)            |
+| Файлы      | S3-совместимое (MinIO)                    |
 | Real-time  | Phoenix Channels (WebSocket)              |
-| Edge       | Traefik 3+                                |
-| CI/CD      | GitHub Actions                            |
+| Proxy      | Traefik 3+                                |
 
 ---
 
-## Быстрый старт
+## Локальная разработка
 
 ### Требования
 
@@ -43,31 +42,90 @@ ChatForge позволяет любому человеку без навыков
 ### Запуск
 
 ```bash
-# 1. Поднять инфраструктуру
-docker-compose up -d
+# 1. Скопировать и заполнить переменные окружения
+cp .env.example .env
 
-# 2. Настроить бэкенд
-cd chatforge
-mix deps.get
-mix ecto.setup
-mix phx.server
+# 2. Поднять инфраструктуру (PostgreSQL, Redis, MinIO, Traefik, Backend)
+docker compose up -d
 
-# 3. Настроить фронтенд (в отдельном терминале)
+# 3. Фронтенд (в отдельном терминале)
 cd frontend
 npm install
 npm run dev
 ```
 
-Бэкенд: `http://localhost:4000`
 Фронтенд: `http://localhost:5173`
+Бэкенд: `http://localhost:4000`
 Health-check: `GET http://localhost:4000/health`
+MinIO консоль: `http://localhost:9001`
+
+### Super Admin
+
+```bash
+# Создать super_admin аккаунт (выполнить после первого запуска)
+docker exec -it chatforge_backend mix run priv/repo/seeds.exs
+```
+
+По умолчанию создаётся `admin@chatforge.dev` / `Admin1234!`. Переопределить через env:
+
+```bash
+docker exec -it chatforge_backend sh -c "SEED_ADMIN_EMAIL=you@example.com SEED_ADMIN_PASSWORD=Secret123! mix run priv/repo/seeds.exs"
+```
+
+---
+
+## Деплой на сервер
+
+### Требования к серверу
+
+- VPS/VDS с KVM-виртуализацией
+- 4 GB RAM минимум
+- Ubuntu 22.04+
+- Docker + Docker Compose
+
+### Установка Docker на сервере
+
+```bash
+curl -fsSL https://get.docker.com | sh
+```
+
+### Запуск
+
+```bash
+# 1. Клонировать репозиторий
+git clone <repo> /opt/chatforge
+cd /opt/chatforge
+
+# 2. Создать и заполнить .env.prod
+cp .env.prod.example .env.prod
+nano .env.prod
+
+# 3. Сгенерировать секреты
+openssl rand -base64 64  # → SECRET_KEY_BASE
+openssl rand -base64 64  # → GUARDIAN_SECRET_KEY
+
+# 4. Запустить
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+```
+
+При старте backend автоматически прогоняет миграции и создаёт super_admin из `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (если не заданы — `admin@chatforge.dev` / `Admin1234!`).
+
+### DNS
+
+Направить на IP сервера:
+- `yourdomain.com` → фронтенд + API
+- `minio.yourdomain.com` → MinIO S3
+- `minio-console.yourdomain.com` → MinIO консоль
+- `traefik.yourdomain.com` → Traefik dashboard
+
+TLS-сертификаты выпускаются автоматически через Let's Encrypt.
 
 ---
 
 ## Структура проекта
 
 ```
-chatforge/                  ← Elixir/Phoenix бэкенд
+backend/                    ← Elixir/Phoenix бэкенд
   lib/chatforge/
     accounts/               ← Регистрация, аутентификация Creator-ов
     instances/              ← Chat Instance, визард, настройки
@@ -103,25 +161,13 @@ frontend/                   ← React/TypeScript SPA
 
 | Фаза | Название | Статус |
 |------|----------|--------|
-| 1 | Инфраструктура, БД, скелет | 🔄 Активная |
-| 2 | Аутентификация | 🔜 Следующая |
-| 3 | Визард создания чата | ⏸️ Планируется |
-| 4 | AI-чат (диалоги, streaming) | ⏸️ Планируется |
-| 5 | Подписки и монетизация | ⏸️ Планируется |
-| 6 | Дашборд и аналитика | ⏸️ Планируется |
-| 7 | Admin-панель | ⏸️ Планируется |
-
----
-
-## Работа с AI-агентом
-
-Проект настроен для работы с AI-агентом в IDE (Kiro). Система включает:
-- Ролевые агенты: Backend, Frontend, QA, Product (`agents/`).
-- Хуки для автоматических проверок (`hooks/`).
-- Фазовую документацию для пошаговой разработки (`phases/`).
-- Правила и ограничения (`rules.md`).
-
-Подробнее: [`agents/`](agents/), [`hooks/HOOKS_GUIDE.md`](hooks/HOOKS_GUIDE.md).
+| 1 | Инфраструктура, БД, скелет | ✅ Завершена |
+| 2 | Аутентификация | ✅ Завершена |
+| 3 | Визард создания чата | ✅ Завершена |
+| 4 | AI-чат (диалоги, streaming) | ✅ Завершена |
+| 5 | Подписки и монетизация | ✅ Завершена |
+| 6 | Дашборд и аналитика | ✅ Завершена |
+| 7 | Admin-панель | ✅ Завершена |
 
 ---
 
