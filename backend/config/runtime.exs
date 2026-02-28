@@ -15,12 +15,21 @@ if config_env() == :prod do
   secret_key_base = System.fetch_env!("SECRET_KEY_BASE")
   port = String.to_integer(System.get_env("PORT", "4000"))
 
+  # CORS_ORIGINS для WebSocket check_origin
+  cors_origins =
+    System.get_env("CORS_ORIGINS", "http://localhost:5173")
+    |> String.split(",")
+    |> Enum.map(&String.trim/1)
+
   config :chatforge, ChatForgeWeb.Endpoint,
     http: [ip: {0, 0, 0, 0, 0, 0, 0, 0}, port: port],
-    secret_key_base: secret_key_base
+    secret_key_base: secret_key_base,
+    check_origin: cors_origins
 
   config :chatforge, ChatForge.Guardian,
     secret_key: System.fetch_env!("GUARDIAN_SECRET_KEY")
+
+  config :chatforge, :cors_origins, cors_origins
 end
 
 # REDIS_URL с дефолтом для локальной разработки
@@ -28,13 +37,15 @@ redis_url = System.get_env("REDIS_URL", "redis://localhost:6379")
 
 config :chatforge, :redis_url, redis_url
 
-# CORS_ORIGINS с дефолтом для Vite dev server
-cors_origins =
-  System.get_env("CORS_ORIGINS", "http://localhost:5173")
-  |> String.split(",")
-  |> Enum.map(&String.trim/1)
+# CORS_ORIGINS для dev окружения
+if config_env() != :prod do
+  cors_origins =
+    System.get_env("CORS_ORIGINS", "http://localhost:5173")
+    |> String.split(",")
+    |> Enum.map(&String.trim/1)
 
-config :chatforge, :cors_origins, cors_origins
+  config :chatforge, :cors_origins, cors_origins
+end
 
 # Конфигурация S3/MinIO для хранения аватаров
 config :ex_aws,

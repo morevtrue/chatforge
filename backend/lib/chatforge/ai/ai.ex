@@ -58,9 +58,9 @@ defmodule ChatForge.AI do
   end
 
   @doc """
-  Вызывает OpenAI Chat Completions API с streaming.
+  Вызывает OpenAI Chat Completions API без streaming.
 
-  callback вызывается для каждого текстового чанка.
+  callback вызывается один раз с полным ответом.
   После завершения сохраняет AIUsageLog.
 
   Возвращает:
@@ -74,11 +74,8 @@ defmodule ChatForge.AI do
     body = %{
       model: model(),
       messages: messages,
-      stream: true
+      stream: false
     }
-
-    # Инициализируем аккумулятор в Process dictionary
-    Process.put(:ai_stream_acc, %{content: "", input_tokens: 0, output_tokens: 0})
 
     result =
       Req.post(url,
@@ -87,48 +84,38 @@ defmodule ChatForge.AI do
           {"authorization", "Bearer #{api_key()}"},
           {"content-type", "application/json"}
         ],
-        receive_timeout: 60_000,
-        # Обрабатываем SSE-поток построчно
-        into: fn {:data, data}, {req, resp} ->
-          # Берём текущий acc из Process dictionary, а не из замыкания
-          current_acc = Process.get(:ai_stream_acc)
-          new_acc = parse_sse_chunk(data, current_acc, callback)
-          Process.put(:ai_stream_acc, new_acc)
-          {:cont, {req, resp}}
-        end
+        receive_timeout: 60_000
       )
 
     case result do
-      {:ok, %{status: status}} when status in 200..299 ->
-        final_acc = Process.get(:ai_stream_acc, %{content: "", input_tokens: 0, output_tokens: 0})
-        Process.delete(:ai_stream_acc)
-        Logger.debug("AI.complete успех: #{byte_size(final_acc.content)} байт контента")
+      {:ok, %{status: status, body: response_body}} when status in 200..299 ->
+        content = get_in(response_body, ["choices", Access.at(0), "message", "content"]) || ""
+        input_tokens = get_in(response_body, ["usage", "prompt_tokens"]) || 0
+        output_tokens = get_in(response_body, ["usage", "completion_tokens"]) || 0
 
-        # Логируем использование (ошибка не прерывает основной поток)
+        Logger.debug("AI.complete успех: #{byte_size(content)} байт контента")
+
+        # Вызываем callback с полным контентом
+        callback.(content)
+
+        # Логируем использование
         log_usage(%{
           chat_instance_id: chat_instance_id,
           conversation_id: conversation_id,
           provider: "openai",
           model: model(),
-          input_tokens: final_acc.input_tokens,
-          output_tokens: final_acc.output_tokens
+          input_tokens: input_tokens,
+          output_tokens: output_tokens
         })
 
-        {:ok, final_acc}
+        {:ok, %{content: content, input_tokens: input_tokens, output_tokens: output_tokens}}
 
       {:ok, %{status: status, body: body}} ->
-        Process.delete(:ai_stream_acc)
         message = extract_error_message(body)
         Logger.error("AI.complete HTTP #{status}: #{message}")
         {:error, %{code: status, message: message}}
 
-      {:error, %{reason: :closed}} ->
-        Process.delete(:ai_stream_acc)
-        Logger.error("AI.complete: соединение закрыто")
-        {:error, :stream_interrupted}
-
       {:error, reason} ->
-        Process.delete(:ai_stream_acc)
         Logger.error("AI.complete ошибка соединения: #{inspect(reason)}")
         {:error, :stream_interrupted}
     end
@@ -156,36 +143,6 @@ defmodule ChatForge.AI do
   # -------------------------------------------------------------------------
   # Приватные функции
   # -------------------------------------------------------------------------
-
-  # Парсит SSE-чанк от OpenAI и вызывает callback для каждого текстового дельта
-  defp parse_sse_chunk(data, acc, callback) do
-    data
-    |> String.split("\n")
-    |> Enum.reduce(acc, fn line, current_acc ->
-      case line do
-        "data: [DONE]" ->
-          current_acc
-
-        "data: " <> json_str ->
-          case Jason.decode(json_str) do
-            {:ok, %{"choices" => [%{"delta" => %{"content" => content}} | _]}}
-            when is_binary(content) and content != "" ->
-              callback.(content)
-              %{current_acc | content: current_acc.content <> content}
-
-            # Финальный чанк с usage (stream_options: include_usage)
-            {:ok, %{"usage" => %{"prompt_tokens" => input, "completion_tokens" => output}}} ->
-              %{current_acc | input_tokens: input, output_tokens: output}
-
-            _ ->
-              current_acc
-          end
-
-        _ ->
-          current_acc
-      end
-    end)
-  end
 
   # Рассчитывает стоимость запроса в USD на основе тарифов модели
   defp calculate_cost(model_name, input_tokens, output_tokens) do

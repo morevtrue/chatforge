@@ -118,6 +118,9 @@ services:
       - "traefik.http.routers.chatforge-backend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.chatforge-backend.priority=10"
       - "traefik.http.services.chatforge-backend.loadbalancer.server.port=4000"
+      # WebSocket support
+      - "traefik.http.middlewares.chatforge-ws.headers.customrequestheaders.Connection=Upgrade"
+      - "traefik.http.middlewares.chatforge-ws.headers.customrequestheaders.Upgrade=websocket"
 
   # ─── Frontend (nginx статика) ──────────────────────────────────────────────
   frontend:
@@ -125,6 +128,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
+        VITE_API_URL: https://${DOMAIN}
+        VITE_WS_URL: wss://${DOMAIN}/socket
         VITE_CHAT_BASE_URL: ${VITE_CHAT_BASE_URL:-https://${DOMAIN}/?subdomain={subdomain}}
     container_name: chatforge_frontend
     restart: unless-stopped

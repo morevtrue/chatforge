@@ -50,6 +50,7 @@ defmodule ChatForge.MixProject do
 
       # HTTP-клиент
       {:req, "~> 0.5"},
+      {:castore, "~> 1.0"},
 
       # AWS / S3-совместимое хранилище
       {:ex_aws, "~> 2.5"},

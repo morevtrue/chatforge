@@ -8,8 +8,12 @@ RUN npm install --frozen-lockfile
 
 COPY . .
 
-# VITE_API_URL и VITE_CHAT_BASE_URL пробрасываются через build args
+# VITE_API_URL, VITE_WS_URL и VITE_CHAT_BASE_URL пробрасываются через build args
+ARG VITE_API_URL
+ARG VITE_WS_URL
 ARG VITE_CHAT_BASE_URL=http://localhost/?subdomain={subdomain}
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_WS_URL=$VITE_WS_URL
 ENV VITE_CHAT_BASE_URL=$VITE_CHAT_BASE_URL
 
 RUN npx vite build
